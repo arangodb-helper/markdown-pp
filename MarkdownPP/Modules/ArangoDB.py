@@ -19,142 +19,85 @@ linkre = re.compile("(\[(.*?)\][\(\[].*?[\)\]])")
 fencedcodere = re.compile("^```\w*$")
 
 class ArangoDB(Module):
-	"""
-	Module to generate an anchored chapter.
-	"""
+  """
+  Module to generate an anchored chapter.
+  """
 
-	@staticmethod
-	def clean_title(title):
-		for link in re.findall(linkre,title):
-			title = title.replace(link[0],link[1])
-		return title.replace(" ", "_")
-
-
-	line = None
-	linenum = None
-	transforms = None
-	dropExampleRun = False
-
-	def head_lines(self):
-		match = chapter_re.search(self.line)
-
-		if match:
-                	type = match.group(1)
-			text = match.group(2)
-                        tag = ArangoDB.clean_title(text).lower()
-
-                        if type == "BOOK":
-                        	indent = "#"
-                        elif type == "CHAPTER":
-                                indent = "#"
-                        elif type == "SECTION":
-                                indent = "##"
-                        elif type == "SUBSECTION":
-                                indent = "###"
-                        elif type == "SUBSUBSECTION":
-                                indent = "####"
-
-                        anchor = '<a name=\"%s\"></a>\n' % tag
-                        header = '%s %s\n' % (indent, text)
-
-			self.transforms.append(Transform(self.linenum, "swap", header))
-			self.transforms.append(Transform(self.linenum, "prepend", anchor))
-
-		return match
+  @staticmethod
+  def clean_title(title):
+    for link in re.findall(linkre,title):
+      title = title.replace(link[0],link[1])
+    return title.replace(" ", "_")
 
 
-	def rest_example(self):
-		match = rest_arg2_re.search(self.line)
+  line = None
+  linenum = None
+  transforms = None
+  dropExampleRun = False
+    
+  def head_lines(self):
+    match = chapter_re.search(self.line)
 
-		if match:
-			type = match.group(1)
-			arg1 = match.group(2)
-			arg2 = match.group(3)
+    if match:
+      type = match.group(1)
+      text = match.group(2)
+      tag = ArangoDB.clean_title(text).lower()
 
-			if type == "RESTHEADER":
-				text = "***\n#### %s\n***\n\n" % arg1
-			else:
-				text = "UNKNOWN %s\n\n" % type
-				match = False
+      if type == "BOOK":
+        indent = "#"
+      elif type == "CHAPTER":
+              indent = "#"
+      elif type == "SECTION":
+              indent = "##"
+      elif type == "SUBSECTION":
+              indent = "###"
+      elif type == "SUBSUBSECTION":
+              indent = "####"
 
-			self.transforms.append(Transform(self.linenum, "swap", text))
+      anchor = '<a name=\"%s\"></a>\n' % tag
+      header = '%s %s\n' % (indent, text)
 
-			return True
+      self.transforms.append(Transform(self.linenum, "swap", header))
+      self.transforms.append(Transform(self.linenum, "prepend", anchor))
 
-		match = rest_arg1_re.search(self.line)
+    return match
 
-		if match:
-			type = match.group(1)
-			arg1 = match.group(2)
 
-			if type == "RESTRETURNCODE":
-				text = "__HTTP Code %s__\n\n" % arg1
-			elif type == "EXAMPLE_ARANGOSH_RUN":
-				text = "INCLUDE %s\n\n" % arg1
-				self.dropExampleRun = True
-			else:
-				text = "UNKNOWN %s\n\n" % type
-				match = False
+  def rest_example(self):
+    match = rest_arg2_re.search(self.line)
+    
+  def transform(self, data):
+    self.transforms = []
+    self.linenum = 0
+    self.dropExampleRun = False
 
-			self.transforms.append(Transform(self.linenum, "swap", text))
+    in_fenced_code_block = False
 
-			return True
+    for self.line in data:
+      if self.dropExampleRun:
+        match = end_example_run_re.search(self.line)
 
-		match = rest_re.search(self.line)
+        if match:
+          self.dropExampleRun = False
 
-		if match:
-			type = match.group(1)
+        self.transforms.append(Transform(self.linenum, "drop"))
 
-			if type == "RESTDESCRIPTION":
-				text = "__Description__\n\n"
-			elif type == "RESTRETURNCODES":
-				text = "__HTTP Return Codes__\n\n"
-			elif type == "EXAMPLES":
-				text = "__Examples__\n\n"
-			elif type == "EXAMPLES":
-				text = "__Examples__\n\n"
-			else:
-				text = "UNKNOWN %s\n\n" % type
+      else:
 
-			self.transforms.append(Transform(self.linenum, "swap", text))
+        # Handling fenced code blocks (for Github-flavored markdown)
+        if fencedcodere.search(self.line):
+          if in_fenced_code_block:
+            in_fenced_code_block = False
+          else:
+            in_fenced_code_block = True
 
-			return True
+        # Are we in a code block?
+        if not in_fenced_code_block and not codere.search(self.line):
+          done = self.head_lines()
 
-		return False
+          if not done:
+            done = self.rest_example()
 
-		
-	def transform(self, data):
-		self.transforms = []
-		self.linenum = 0
-		self.dropExampleRun = False
+      self.linenum += 1
 
-		in_fenced_code_block = False
-
-		for self.line in data:
-			if self.dropExampleRun:
-				match = end_example_run_re.search(self.line)
-
-				if match:
-					self.dropExampleRun = False
-
-				self.transforms.append(Transform(self.linenum, "drop"))
-
-			else:
-
-				# Handling fenced code blocks (for Github-flavored markdown)
-				if fencedcodere.search(self.line):
-					if in_fenced_code_block:
-						in_fenced_code_block = False
-					else:
-						in_fenced_code_block = True
-
-				# Are we in a code block?
-				if not in_fenced_code_block and not codere.search(self.line):
-					done = self.head_lines()
-
-					if not done:
-						done = self.rest_example()
-
-			self.linenum += 1
-
-		return self.transforms
+    return self.transforms
