@@ -13,6 +13,7 @@ rest_re = re.compile("^@(REST[A-Z]*|EXAMPLES)\s*$")
 rest_arg1_re = re.compile("^@(REST[A-Z]*|EXAMPLE_ARANGOSH_RUN)\{(\S*)\}\s*$")
 rest_arg2_re = re.compile("^@(REST[A-Z]*)\{([^},]*),([^},]*)\}\s*$")
 end_example_run_re = re.compile("^@END_EXAMPLE_ARANGOSH_RUN\s*$")
+unescameMDInANames_re = re.compile("\\\\_")
 
 codere = re.compile("^(    |\t)")
 linkre = re.compile("(\[(.*?)\][\(\[].*?[\)\]])")
@@ -54,7 +55,8 @@ class ArangoDB(Module):
       elif type == "SUBSUBSECTION":
               indent = "####"
 
-      anchor = '<a name=\"%s\"></a>\n' % tag
+      anchorName = unescameMDInANames_re.sub("_", tag)
+      anchor = '<a name=\"%s\"></a>\n' % anchorName
       header = '%s %s\n' % (indent, text)
 
       self.transforms.append(Transform(self.linenum, "swap", header))
